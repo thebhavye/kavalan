@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kavalan — {{ title }}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2em; max-width: 40em; }
+    button { font-size: 1.2em; padding: 0.5em 1em; margin-right: 0.5em; }
+    code { word-break: break-all; }
+  </style>
+</head>
+<body>
+  {{ body }}
+  <script>
+    async function decide(approved) {
+      const res = await fetch("/decision", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id: Number("{{ held_id }}"), approved})
+      });
+      const data = await res.json();
+      document.getElementById("out").textContent =
+        "Recorded: " + data.status + ". Kavalan will now resume through ArmorIQ.";
+    }
+  </script>
+</body>
+</html>

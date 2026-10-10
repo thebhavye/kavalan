@@ -1,0 +1,55 @@
+# Kavalan policy mirror (human-readable).
+# CANONICAL ENFORCEMENT LIVES IN THE ArmorIQ DASHBOARD (Policies).
+# TODO(armoriq-docs): adapt this file to ArmorIQ's real stored-policy format
+# once the Policy Builder / Policy Studio / OPA schema is confirmed
+# (see docs/OPEN_QUESTIONS.md Q5). The `inline_policy` block below uses the
+# verified SDK inline-policy shape from the policy-specification docs.
+version: v1
+agent: kavalan-guardian
+mcps:
+  - kavalan-payments
+  - kavalan-pharmacy
+
+defaults:
+  auto_allow_bill_limit_inr: 5000
+  hold_transfer_above_inr: 5000
+  approval_wait_seconds: 60
+
+rules:
+  - name: usual-bills-allowed
+    effect: allow
+    tools: ["kavalan-payments.pay_bill"]
+    conditions:
+      - payee_registered: true
+      - amount_paise: { lte: 500000 }   # Rs 5,000; keep field named `amount`
+
+  - name: big-or-new-transfer-held
+    effect: hold
+    tools: ["kavalan-payments.transfer_money", "kavalan-payments.pay_bill"]
+    conditions_any:
+      - amount_paise: { gt: 500000 }
+      - payee_registered: false
+    approval: family_member
+
+  - name: credentials-never-shared
+    effect: deny
+    tools: ["kavalan-payments.share_otp", "kavalan-payments.share_credentials"]
+
+  - name: non-allowlisted-transfer-denied
+    effect: deny
+    tools: ["kavalan-payments.transfer_money"]
+    conditions:
+      - destination_allowlisted: false
+
+  - name: outside-plan-denied
+    effect: deny
+    note: enforced by ArmorIQ plan verification (IntentMismatchException),
+          not by a stored rule — any tool call outside the declared intent
+          plan fails closed.
+
+# Inline policy dict passed to get_intent_token() for a single token
+# (further constrains that token only; stored dashboard policies apply anyway).
+inline_policy:
+  allow: ["kavalan-payments/pay_bill", "kavalan-payments/list_payees",
+          "kavalan-payments/get_balance", "kavalan-pharmacy/*"]
+  deny: ["kavalan-payments/share_*", "kavalan-payments/transfer_money"]
