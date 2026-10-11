@@ -17,8 +17,9 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.common import db as ledger
+from mcp_servers.common.transport import tunnel_transport_security
 
-mcp = FastMCP("kavalan-payments")
+mcp = FastMCP("kavalan-payments", transport_security=tunnel_transport_security())
 
 
 def _conn():
@@ -87,4 +88,8 @@ def share_otp(otp: str = "", channel: str = "") -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    # Streamable HTTP (not stdio) so the ArmorIQ proxy can reach the tools
+    # over the public tunnel at /mcp. Port 8001 keeps :8000 for approvals.
+    mcp.settings.host = "127.0.0.1"
+    mcp.settings.port = 8001
+    mcp.run(transport="streamable-http")

@@ -84,7 +84,10 @@ make tunnel           # cloudflared quick tunnel, no account needed
 
 Copy the printed `https://<random>.trycloudflare.com` URL and register
 `<url>/mcp` as the MCP URL in the ArmorIQ dashboard (MCP Servers → Add
-Server). Restart the tunnel if the URL changes — the dashboard registration
+Server). Also add that hostname to `MCP_PUBLIC_HOSTS` in `.env` and restart
+the MCP server — it keeps DNS-rebinding protection on and rejects unknown
+Host headers with HTTP 421. Use `make tunnel-pharmacy` (`:8002`) for the
+pharmacy MCP. Restart the tunnel if the URL changes — the dashboard registration
 must match exactly. (Alternative: `ngrok http 8001`, needs an authtoken.)
 
 ## ArmorIQ setup (dashboard)

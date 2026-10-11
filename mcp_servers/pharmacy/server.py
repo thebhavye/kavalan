@@ -11,8 +11,9 @@ import time
 from mcp.server.fastmcp import FastMCP
 
 from mcp_servers.common import db as ledger
+from mcp_servers.common.transport import tunnel_transport_security
 
-mcp = FastMCP("kavalan-pharmacy")
+mcp = FastMCP("kavalan-pharmacy", transport_security=tunnel_transport_security())
 
 
 def _conn():
@@ -60,4 +61,8 @@ def list_prescriptions() -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    # Streamable HTTP so the ArmorIQ proxy can reach the tools over the
+    # public tunnel at /mcp. Port 8002 keeps :8000/:8001 for approvals/payments.
+    mcp.settings.host = "127.0.0.1"
+    mcp.settings.port = 8002
+    mcp.run(transport="streamable-http")
