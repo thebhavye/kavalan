@@ -48,13 +48,29 @@ def connect(path: str | os.PathLike | None = None) -> sqlite3.Connection:
     return conn
 
 
-def _migrate(conn: sqlite3.Connection) -> None:
-    """Add args_version to pre-existing DBs; old rows default to v1 (paise)."""
+def _has_args_version(conn: sqlite3.Connection) -> bool:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(held_actions)")}
-    if "args_version" not in cols:
-        conn.execute("ALTER TABLE held_actions"
-                     " ADD COLUMN args_version INTEGER NOT NULL DEFAULT 1")
+    return "args_version" in cols
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add args_version to pre-existing DBs; old rows default to v1 (paise).
+
+    The agent and the approval server share this DB, so two first connections
+    can race. Re-check under a write lock (BEGIN IMMEDIATE) so only one of
+    them runs the ALTER; the other sees the column and does nothing.
+    """
+    if _has_args_version(conn):
+        return
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if not _has_args_version(conn):
+            conn.execute("ALTER TABLE held_actions"
+                         " ADD COLUMN args_version INTEGER NOT NULL DEFAULT 1")
         conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
 
 
 def add_held(*, trace_id: str, tool: str, args: dict, reason: str,

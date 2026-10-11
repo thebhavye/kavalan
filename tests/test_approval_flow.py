@@ -90,3 +90,39 @@ def test_legacy_paise_row_is_never_resumed(tmp_path, monkeypatch):
     new_id = store.add_held(trace_id="t", tool="kavalan-payments.transfer_money",
                             args={"amount": 40000}, reason="hold")
     assert store.get_held(new_id)["args_version"] == store.ARGS_VERSION
+
+
+def test_concurrent_first_migrations_do_not_collide(tmp_path, monkeypatch):
+    """The loser of a migration race re-checks under the lock and skips ALTER."""
+    import sqlite3
+
+    db = tmp_path / "approval.db"
+    legacy = sqlite3.connect(db)
+    legacy.execute(
+        "CREATE TABLE held_actions (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " created_at REAL NOT NULL, decided_at REAL, trace_id TEXT NOT NULL,"
+        " tool TEXT NOT NULL, args_json TEXT NOT NULL DEFAULT '{}',"
+        " reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending')")
+    legacy.commit()
+    legacy.close()
+
+    winner, loser = sqlite3.connect(db), sqlite3.connect(db)
+    for conn in (winner, loser):
+        conn.row_factory = sqlite3.Row
+    store._migrate(winner)
+
+    # The loser's unlocked fast-path check ran before the winner committed,
+    # so it reports "missing" once; the locked re-check must see the truth.
+    real = store._has_args_version
+    calls = []
+
+    def stale_then_real(conn):
+        calls.append(conn)
+        return False if len(calls) == 1 else real(conn)
+
+    monkeypatch.setattr(store, "_has_args_version", stale_then_real)
+    store._migrate(loser)  # must not raise "duplicate column name"
+    assert len(calls) == 2  # fast path said missing; locked re-check ran
+    assert real(loser)
+    winner.close()
+    loser.close()
