@@ -133,6 +133,9 @@ class KavalanAgent:
             return f"unknown held action: {held_id}"
         if row["status"] != approval_store.STATUS_APPROVED:
             return f"held action {held_id} is {row['status']} — not executing."
+        if row.get("args_version", 1) < approval_store.ARGS_VERSION:
+            return (f"held action {held_id} was saved in an older amount format"
+                    " — not executing. Please make the request again.")
         mcp, _, action = row["tool"].partition(".")
         trace_id = uuid.uuid4().hex[:12]
         plan = self.adapter.declare_plan(

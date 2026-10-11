@@ -53,3 +53,40 @@ def test_reject_never_executes(tmp_path, monkeypatch):
     assert client.post("/decision", json={"id": held_id, "approved": False}).json()[
         "status"] == "rejected"
     assert client.get("/pending").json() == {"pending": []}
+
+
+def test_legacy_paise_row_is_never_resumed(tmp_path, monkeypatch):
+    """A row held before amounts switched to rupees must not replay at 100x."""
+    import sqlite3
+
+    db = tmp_path / "approval.db"
+    monkeypatch.setenv("KAVALAN_APPROVAL_DB", str(db))
+    # Pre-upgrade DB: no args_version column, amount in paise.
+    legacy = sqlite3.connect(db)
+    legacy.executescript(
+        "CREATE TABLE held_actions (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " created_at REAL NOT NULL, decided_at REAL, trace_id TEXT NOT NULL,"
+        " tool TEXT NOT NULL, args_json TEXT NOT NULL DEFAULT '{}',"
+        " reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending');"
+        "INSERT INTO held_actions (created_at, trace_id, tool, args_json, status)"
+        " VALUES (0, 'old', 'kavalan-payments.transfer_money',"
+        " '{\"to_account\": \"family-beta\", \"amount\": 4000000}', 'approved');")
+    legacy.commit()
+    legacy.close()
+
+    row = store.get_held(1)
+    assert row["args_version"] == 1
+
+    class NeverCalled:
+        def declare_plan(self, **kw):
+            raise AssertionError("legacy row must not reach ArmorIQ")
+
+        execute = declare_plan
+
+    out = KavalanAgent(adapter=NeverCalled()).resume_held(1, "amma@example.com")
+    assert "not executing" in out
+
+    # New rows are written at the current version and stay resumable.
+    new_id = store.add_held(trace_id="t", tool="kavalan-payments.transfer_money",
+                            args={"amount": 40000}, reason="hold")
+    assert store.get_held(new_id)["args_version"] == store.ARGS_VERSION
