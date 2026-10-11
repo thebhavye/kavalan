@@ -100,7 +100,9 @@ must match exactly. (Alternative: `ngrok http 8001`, needs an authtoken.)
 4. Create the allow / hold / block policies in **Policies** (see
    `policy/kavalan_policy.yaml` — a human-readable mirror; the dashboard is
    canonical). Until a policy matches, ArmorIQ fails closed
-   (`no_matching_policy`).
+   (`no_matching_policy`). Amount thresholds are in **rupees**
+   (`amount > 5000`); if you created a paise-based rule earlier
+   (`500000`), update it in the dashboard first — see `docs/POLICY.md`.
 5. Approve HELD actions under **Approvals** (or the local
    `APPROVAL_BASE_URL` page, which the agent polls); observe everything under
    **Observability**.

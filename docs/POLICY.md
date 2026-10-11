@@ -38,6 +38,13 @@ closed** (`no_matching_policy`).
   `amount` (ArmorIQ scans `amount/value/total/price/cost`; e.g. a field named
   `total_cents` would be invisible to thresholds). Tool `amount` params are
   whole **rupees**; the sandbox ledger converts to paise internally.
+- **Upgrade warning — thresholds are in rupees.** Write limits as
+  `amount > 5000`, not `500000`. Any dashboard policy authored against the
+  earlier paise-based scaffold must be edited to rupees **before** running
+  this agent version: a stale `amount > 500000` rule would let a ₹40,000
+  transfer through without a hold. Editing `policy/kavalan_policy.yaml`
+  does not change the dashboard — update the policy there, then confirm
+  with beat 2 (`Beta ko Rs 40,000 bhej do` must come back HELD).
 - Cover **every** money-moving tool (`pay_bill` AND `transfer_money`); the
   model will otherwise reach for the uncovered sibling.
 - Per-user limits differ by role (e.g. tier-1 family helper vs. account
