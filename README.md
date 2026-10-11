@@ -71,6 +71,22 @@ make run-agent        # agent CLI, TEXT mode
 make demo             # 3 scripted scenarios through the REAL pipeline
 ```
 
+## Live ArmorIQ run (public tunnel for the MCP)
+
+The ArmorIQ proxy executes tools on your MCP server-side, so it must reach
+your MCP over a **public HTTPS URL** — `localhost` does not work. For local
+development, expose the payments MCP (streamable-http on `:8001`, path
+`/mcp`) with:
+
+```sh
+make tunnel           # cloudflared quick tunnel, no account needed
+```
+
+Copy the printed `https://<random>.trycloudflare.com` URL and register
+`<url>/mcp` as the MCP URL in the ArmorIQ dashboard (MCP Servers → Add
+Server). Restart the tunnel if the URL changes — the dashboard registration
+must match exactly. (Alternative: `ngrok http 8001`, needs an authtoken.)
+
 ## ArmorIQ setup (dashboard)
 
 1. Sign up at `platform.armoriq.ai`, generate an API key (`ak_live_…` /

@@ -1,52 +1,83 @@
 # Open questions about ArmorIQ docs
 
-Read so far (2026-10-10): docs home, `platform/getting-started`,
+Read so far (2026-10-10/11): docs home, `platform/getting-started`,
 `sdk/installation`, `sdk` overview, `sdk/client-initialization`,
 `sdk/core-methods` + `capture-plan` / `get-intent-token` /
-`policy-specification` / `invoke`, `sdk/mcp-directory`, `sdk/configuration`,
-`sdk/error-handling`, `platform/policies`, `cookbook/adk-agent`.
-Dashboard at `platform.armoriq.ai` could not be inspected (requires login).
+`policy-specification` / `invoke`, `sdk/mcp-directory` + `mcp-format`,
+`sdk/configuration`, `sdk/error-handling`, `platform/policies` +
+`policy-builder` + `enforcement`, `platform/mcp-servers` + `add-server`,
+`platform/agents` + `add-agent`, `cookbook/adk-agent`, `armorpay` overview.
+Plus installed `armoriq-sdk 0.6.10` source (`client.py`, `session.py`,
+`models.py`). Dashboard at `platform.armoriq.ai` could not be inspected
+(requires login).
 
 Code places that depend on the answers below are marked `TODO(armoriq-docs)`.
 
-1. **Session API surface (Python, raw SDK).** `client-initialization` shows
-   `scope = client.for_user(email)` then `session = scope.start_session()`
-   with `session.start_plan([...])` / `session.check(...)`, and
-   `error-handling` mentions `await_approval` (sessions) and
-   `invoke_with_policy`/`invokeWithPolicy` (polling). Signatures, return
-   types and which one a non-framework (hand-rolled loop) agent should use
-   are not on the fetched pages. → affects `agent/armoriq_adapter.py`.
-2. **Hold/resume protocol.** After `PolicyHoldException`, where is the hold
-   approved — dashboard **Approvals** only, or an API we should poll from the
-   approval service? What identifies the hold (`delegation_context` shape)?
-   Does resume mean plain re-`invoke` (possibly with a fresh token, given
-   the 60 s default TTL), or a dedicated confirm call? → affects
-   `approval/` + adapter resume path.
-3. **MCP onboarding format for proxy-routed tools.** `mcp-directory` covers
-   registering name + HTTPS URL; the cookbook deploys the MCP publicly and
-   the agent calls it directly with enforcement at the agent layer. For
-   Kavalan, must our FastMCP servers be publicly reachable, or does
-   `invoke()` proxy to them (and if so, what is the exact
-   [MCP Format Requirements](https://docs.armoriq.ai/sdk/mcp-directory/mcp-format)
-   page content — tools/list over StreamableHTTP, auth/credentials shape)?
-4. **Agent registration for raw-SDK users.** The cookbook registers agent
-   name `ops-copilot` via dashboard and passes `agentName` to the ADK
-   adapter; the raw `ArmorIQClient` constructor takes no `agent_id`
-   (deprecated). How is the agent name bound for raw-SDK usage
-   (`armoriq.yaml` identity? dashboard convention?) so policies scope
-   correctly? → affects `.env` (`ARMORIQ_AGENT_NAME`) + `armoriq.yaml` plans.
-5. **Threshold / allowlist policy authoring.** How are "amount > Rs 5,000",
-   "registered vs new payee", and "non-allowlisted account" expressed in
-   Policy Builder / Policy Studio / OPA Engine — and can thresholds read
-   tool params beyond the scanned `amount/value/total/price/cost` names?
-   (Cookbook warns custom amount field names are invisible.)
-6. **Dashboard deep links + trace API.** Exact paths for Observability /
-   Approvals / Policies, and whether traces can be queried programmatically
-   for the demo's "show dashboard traces" beat.
-7. **`armoriq.yaml` + CLI for this project.** Should we commit an
-   `armoriq.yaml` (via `armoriq init`) and use `from_config()`? Schema shows
-   required `identity.user_id`/`agent_id` which conflicts with the newer
-   `for_user(email)` model — which wins?
-8. **SDK Observability setup.** What (if any) code is needed so our runs
-   appear in dashboard traces — automatic via proxy, or explicit
-   observability SDK calls?
+## Resolved / mostly resolved
+
+1. **Session API surface — RESOLVED (raw path chosen).** Verified in
+   `client.py`: `client.for_user(email)` → scope; `scoped.start_session(
+   SessionOptions(mode="sdk"))`; `session.start_plan([...])` /
+   `session.check(tool, args)` / `session.await_approval(delegation_id,
+   timeout, interval)` (async). For Kavalan's hand-rolled loop the raw
+   `capture_plan → get_intent_token → invoke` path (all signatures verified
+   against the installed SDK) is sufficient; sessions are not required.
+2. **Hold/resume protocol — PARTLY RESOLVED.** `invoke()` raises
+   `PolicyHoldException` carrying `delegation_context`; `await_approval()`
+   is `async`. Resume = re-`invoke` after approval (possibly fresh token —
+   default TTL is 60 s). Our sync adapter will need `asyncio` handling for
+   `await_approval`; exact `delegation_context` shape still to be observed
+   live.
+3. **MCP onboarding + reachability — RESOLVED (tunnel needed).**
+   `invoke()` POSTs to `{proxy}/invoke`; the **proxy executes the tool on
+   the registered MCP URL server-side**. MCP format = JSON-RPC over HTTP,
+   SSE framing, three methods (`initialize`, `tools/list`, `tools/call`),
+   protocol `2024-11-05`, **public HTTPS URL required** — `localhost` will
+   not work. Our FastMCP (mcp 1.x) `streamable-http` serves exactly `/mcp`,
+   matching the cookbook ("URL with `/mcp` on the end"). Hence `make
+   tunnel` (cloudflared → `:8001`). REMAINING: whether the proxy speaks
+   stateful streamable-HTTP (session IDs) or needs stateless/JSON mode —
+   to be observed live; FastMCP settings (`stateless_http`,
+   `json_response`) give us knobs.
+4. **Agent registration/binding — MOSTLY RESOLVED.** Binding is via
+   `agent_id` in the token payload (`ArmorIQClient(agent_id=…)` or
+   `AGENT_ID` env). Dashboard: Agents → Add Agent, name it
+   `kavalan-guardian`. REMAINING: the wizard also asks for the agent's URL
+   + framework (A2A/MCP auto-detect) — our agent is a CLI with no URL; may
+   need the tunnel URL or a manual-config bypass.
+5. **Threshold / hold / block policy authoring — OPEN (beats 2–3).** The
+   generic Policy Builder only shows agent↔MCP edges, allowed-tools
+   whitelists, IP/time/rate limits and priorities — no amount thresholds,
+   no hold/block actions. ArmorPay has thresholds/velocity/recipient
+   validation but targets its own pre-configured agent types (AP/Finance/
+   Payroll). How (if at all) a custom agent expresses "hold transfer >
+   Rs 5,000" / "always block share_otp" is unverified. For beat 1
+   (ALLOWED) an allowed-tools policy is sufficient.
+6. **Dashboard deep links + trace API — OPEN.** Paths seen in SDK errors:
+   `platform.armoriq.ai/dashboard/api-keys`; cookbook references an
+   **Approvals** section and **Observability**. Exact URLs + any trace API
+   still to be confirmed in the live dashboard.
+7. **`armoriq.yaml` + CLI — OPEN, low priority.** Raw-SDK construction
+   works; `from_config()` not needed for Phase 2.
+8. **SDK Observability setup — OPEN.** Assumed automatic via proxy; confirm
+   traces appear without extra code.
+
+## New questions from SDK-source reading (2026-10-11)
+
+9. **Stateful vs stateless MCP transport.** Does the proxy handle
+   streamable-HTTP session IDs, or must we serve stateless/JSON
+   (`stateless_http=True`, `json_response=True`)? Observe the first live
+   `invoke`; failure mode will tell us.
+10. **Default-allow vs fail-closed contradiction.** `policies/enforcement`
+    says "if no policy matches, access is allowed by default", while the
+    cookbook says unconfigured calls fail with `no_matching_policy`. Our
+    beat-1 policy will be explicit either way — but note the actual
+    behavior observed and report it.
+11. **Agent-wizard URL requirement.** Can a URL-less CLI agent be
+    registered by name only, or must we supply a URL (tunnel?) and pick a
+    framework?
+12. **MCP auth for tunneled servers.** Wizard offers Auth Method (API
+    Key); SDK sends per-MCP creds via `ARMORIQ_MCP_CREDENTIALS` /
+    `X-Armoriq-MCP-Auth`. Start with auth "none" if allowed (sandbox);
+    cookbook warns a public no-auth MCP is directly callable — acceptable
+    for fake-ledger demo, revisit before any real data.
