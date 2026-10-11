@@ -44,7 +44,7 @@ def policy_mirror(action, params):
     if action == "transfer_money":
         if params.get("to_account") == "scammer-acct-999":
             return DecisionType.BLOCKED, "non-allowlisted account", None
-        if amount > 500_000 or params.get("to_account") == "new-payee":
+        if amount > 5_000 or params.get("to_account") == "new-payee":
             return DecisionType.HELD, "above threshold or new payee", None
         return DecisionType.ALLOWED, "ok", {"entry_id": 1}
     if action == "pay_bill":

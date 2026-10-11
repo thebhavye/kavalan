@@ -13,6 +13,11 @@ STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 
+# Format of args_json. v1 rows stored `amount` in paise; v2 stores whole
+# rupees. Rows older than ARGS_VERSION are never resumed (fail closed) —
+# replaying a v1 amount as rupees would move 100x the intended money.
+ARGS_VERSION = 2
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS held_actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +27,8 @@ CREATE TABLE IF NOT EXISTS held_actions (
     tool TEXT NOT NULL,
     args_json TEXT NOT NULL DEFAULT '{}',
     reason TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'pending'
+    status TEXT NOT NULL DEFAULT 'pending',
+    args_version INTEGER NOT NULL DEFAULT 1
 );
 """
 
@@ -38,16 +44,44 @@ def connect(path: str | os.PathLike | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _has_args_version(conn: sqlite3.Connection) -> bool:
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(held_actions)")}
+    return "args_version" in cols
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add args_version to pre-existing DBs; old rows default to v1 (paise).
+
+    The agent and the approval server share this DB, so two first connections
+    can race. Re-check under a write lock (BEGIN IMMEDIATE) so only one of
+    them runs the ALTER; the other sees the column and does nothing.
+    """
+    if _has_args_version(conn):
+        return
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if not _has_args_version(conn):
+            conn.execute("ALTER TABLE held_actions"
+                         " ADD COLUMN args_version INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
 
 
 def add_held(*, trace_id: str, tool: str, args: dict, reason: str,
              path: str | os.PathLike | None = None) -> int:
     with connect(path) as conn:
         cur = conn.execute(
-            "INSERT INTO held_actions (created_at, trace_id, tool, args_json, reason, status)"
-            " VALUES (?, ?, ?, ?, ?, 'pending')",
-            (time.time(), trace_id, tool, json.dumps(args, ensure_ascii=False), reason),
+            "INSERT INTO held_actions"
+            " (created_at, trace_id, tool, args_json, reason, status, args_version)"
+            " VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            (time.time(), trace_id, tool, json.dumps(args, ensure_ascii=False), reason,
+             ARGS_VERSION),
         )
         conn.commit()
         return int(cur.lastrowid)
