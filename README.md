@@ -64,8 +64,8 @@ uv run pytest -q
 ## Run
 
 ```sh
-make run-mcp          # payments MCP server (stdio)
-make run-mcp-pharmacy # pharmacy MCP server (stdio)
+make run-mcp          # payments MCP server (HTTP :8001/mcp)
+make run-mcp-pharmacy # pharmacy MCP server (HTTP :8002/mcp)
 make run-approval     # approval web service on :8000
 make run-agent        # agent CLI, TEXT mode
 make demo             # 3 scripted scenarios through the REAL pipeline
@@ -84,7 +84,10 @@ make tunnel           # cloudflared quick tunnel, no account needed
 
 Copy the printed `https://<random>.trycloudflare.com` URL and register
 `<url>/mcp` as the MCP URL in the ArmorIQ dashboard (MCP Servers → Add
-Server). Restart the tunnel if the URL changes — the dashboard registration
+Server). Also add that hostname to `MCP_PUBLIC_HOSTS` in `.env` and restart
+the MCP server — it keeps DNS-rebinding protection on and rejects unknown
+Host headers with HTTP 421. Use `make tunnel-pharmacy` (`:8002`) for the
+pharmacy MCP. Restart the tunnel if the URL changes — the dashboard registration
 must match exactly. (Alternative: `ngrok http 8001`, needs an authtoken.)
 
 ## ArmorIQ setup (dashboard)

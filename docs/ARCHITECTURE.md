@@ -73,8 +73,8 @@ Failures **raise**, they do not return flags: `PolicyBlockedException`
 
 | Process | Command | Notes |
 |---|---|---|
-| payments MCP | `make run-mcp` | stdio transport (scaffold) |
-| pharmacy MCP | `make run-mcp-pharmacy` | stdio transport (scaffold) |
+| payments MCP | `make run-mcp` | streamable HTTP on `:8001`, path `/mcp` |
+| pharmacy MCP | `make run-mcp-pharmacy` | streamable HTTP on `:8002`, path `/mcp` |
 | approval web | `make run-approval` | FastAPI on `:8000` |
 | agent CLI | `make run-agent` | TEXT mode; voice is stubbed |
 

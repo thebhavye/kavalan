@@ -1,4 +1,4 @@
-.PHONY: setup run-mcp run-mcp-pharmacy run-approval run-agent test seed demo tunnel
+.PHONY: setup run-mcp run-mcp-pharmacy run-approval run-agent test seed demo tunnel tunnel-pharmacy
 
 setup:
 	if command -v uv >/dev/null 2>&1; then uv sync; else python -m venv .venv && . .venv/bin/activate && pip install -e .; fi
@@ -29,5 +29,11 @@ demo:
 # https://<random>.trycloudflare.com URL — register THAT (+ /mcp) as the MCP
 # URL in the ArmorIQ dashboard. Requires `cloudflared` installed.
 # (Alternative: ngrok http 8001 — needs an ngrok authtoken.)
+# Then add the printed hostname to MCP_PUBLIC_HOSTS in .env and restart the
+# MCP server, or it rejects tunneled requests with HTTP 421.
 tunnel:
 	cloudflared tunnel --url http://127.0.0.1:8001
+
+# Same for the pharmacy MCP (streamable-http on :8002, /mcp).
+tunnel-pharmacy:
+	cloudflared tunnel --url http://127.0.0.1:8002
