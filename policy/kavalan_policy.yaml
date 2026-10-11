@@ -21,13 +21,13 @@ rules:
     tools: ["kavalan-payments.pay_bill"]
     conditions:
       - payee_registered: true
-      - amount_paise: { lte: 500000 }   # Rs 5,000; keep field named `amount`
+      - amount: { lte: 5000 }   # rupees; field must be named `amount`
 
   - name: big-or-new-transfer-held
     effect: hold
     tools: ["kavalan-payments.transfer_money", "kavalan-payments.pay_bill"]
     conditions_any:
-      - amount_paise: { gt: 500000 }
+      - amount: { gt: 5000 }
       - payee_registered: false
     approval: family_member
 

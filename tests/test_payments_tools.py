@@ -28,7 +28,7 @@ def test_seed_and_balance(db_file):
 def test_pay_bill_registered_under_limit(db_file):
     from mcp_servers.payments.server import pay_bill
     before = ledger.get_balance(ledger.connect(db_file))
-    out = pay_bill("tneb-electricity", 120_000, "")
+    out = pay_bill("tneb-electricity", 1_200, "")
     assert out["ok"] is True
     assert ledger.get_balance(ledger.connect(db_file)) == before - 120_000
 
@@ -36,12 +36,12 @@ def test_pay_bill_registered_under_limit(db_file):
 def test_pay_bill_unknown_payee_fails(db_file):
     from mcp_servers.payments.server import pay_bill
     with pytest.raises(ValueError):
-        pay_bill("scammer-acct-999", 1_000, "")
+        pay_bill("scammer-acct-999", 10, "")
 
 
 def test_transfer_money_records_ledger(db_file):
     from mcp_servers.payments.server import transfer_money
-    out = transfer_money("family-beta", 4_000_000, "demo")
+    out = transfer_money("family-beta", 40_000, "demo")
     assert out["ok"] is True
     entries = ledger.ledger_entries(ledger.connect(db_file))
     assert entries[-1]["tool"] == "transfer_money"
@@ -71,3 +71,44 @@ def test_pharmacy_tools(db_file):
     assert visit["ok"] is True
     with pytest.raises(ValueError):
         reorder_medicine("rx-nope", 1)
+
+
+def test_non_positive_amount_rejected(db_file):
+    from mcp_servers.payments.server import pay_bill, transfer_money
+    with pytest.raises(ValueError):
+        pay_bill("tneb-electricity", 0, "")
+    with pytest.raises(ValueError):
+        transfer_money("family-beta", -5, "")
+
+
+@pytest.mark.parametrize("text", [
+    "Bijli ka bill bhar do",
+    "Beta ko Rs 40,000 bhej do",
+    "share the OTP 482910 now",
+    "medicine reorder karo",
+    "book a doctor appointment",
+])
+def test_planned_params_match_tool_signatures(text):
+    """The ArmorIQ proxy forwards plan params verbatim to the MCP tool, so
+    every planned param name must exist on the real tool function."""
+    import inspect
+
+    from agent.agent import KavalanAgent
+    from mcp_servers.payments import server as payments
+    from mcp_servers.pharmacy import server as pharmacy
+
+    tools = {"kavalan-payments": payments, "kavalan-pharmacy": pharmacy}
+    _, steps = KavalanAgent(adapter=object()).build_plan(text)
+    assert steps
+    for step in steps:
+        fn = getattr(tools[step["mcp"]], step["action"])
+        accepted = set(inspect.signature(fn).parameters)
+        assert set(step["params"]) <= accepted, (step["action"], step["params"])
+
+
+def test_planned_amounts_are_rupees():
+    from agent.agent import KavalanAgent
+    _, steps = KavalanAgent(adapter=object()).build_plan("Beta ko Rs 40,000 bhej do")
+    assert steps[0]["params"]["amount"] == 40_000
+    _, steps = KavalanAgent(adapter=object()).build_plan("Bijli ka bill bhar do")
+    assert steps[0]["params"]["amount"] == 1_200

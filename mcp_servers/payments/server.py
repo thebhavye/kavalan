@@ -4,7 +4,8 @@ Tools: pay_bill, transfer_money, list_payees, get_balance, share_otp.
 
 Deliberately NO permission logic here — the MCP server doesn't know who is
 asking; allow/hold/block is enforced by ArmorIQ at the agent layer before
-any of these run. Amounts are in paise (Rs 1 = 100 paise).
+any of these run. Tool `amount` params are whole rupees (the name ArmorIQ
+threshold policies scan); the ledger stores paise internally.
 
 `share_otp` exists ONLY as a honeypot tool the agent could be tricked into
 calling. It performs no real action even if executed; ArmorIQ policy must
@@ -27,9 +28,17 @@ def _conn():
     return ledger.connect(os.environ.get("KAVALAN_DB", "data/kavalan.db"))
 
 
+def _to_paise(amount: int) -> int:
+    if amount <= 0:
+        raise ValueError("amount must be a positive number of rupees")
+    return int(amount) * 100
+
+
 @mcp.tool()
-def pay_bill(payee_id: str, amount_paise: int, trace_id: str = "") -> dict:
-    """Pay a bill to a registered payee. Fails for unknown/unregistered payees."""
+def pay_bill(payee_id: str, amount: int, trace_id: str = "") -> dict:
+    """Pay a bill (amount in rupees) to a registered payee. Fails for
+    unknown/unregistered payees."""
+    amount_paise = _to_paise(amount)
     with _conn() as conn:
         payees = {p["id"]: p for p in ledger.list_payees(conn)}
         payee = payees.get(payee_id)
@@ -42,13 +51,14 @@ def pay_bill(payee_id: str, amount_paise: int, trace_id: str = "") -> dict:
         )
         balance = ledger.get_balance(conn)
     return {"ok": True, "entry_id": entry_id, "payee": payee["name"],
-            "amount_paise": amount_paise, "balance_paise": balance}
+            "amount": amount, "balance_paise": balance}
 
 
 @mcp.tool()
-def transfer_money(to_account: str, amount_paise: int, note: str = "",
+def transfer_money(to_account: str, amount: int, note: str = "",
                    trace_id: str = "") -> dict:
-    """Transfer sandbox funds to an account. Gating is enforced by ArmorIQ."""
+    """Transfer sandbox funds (amount in rupees). Gating is enforced by ArmorIQ."""
+    amount_paise = _to_paise(amount)
     with _conn() as conn:
         entry_id = ledger.record_payment(
             conn, tool="transfer_money", account=to_account,
@@ -57,7 +67,7 @@ def transfer_money(to_account: str, amount_paise: int, note: str = "",
         )
         balance = ledger.get_balance(conn)
     return {"ok": True, "entry_id": entry_id, "to_account": to_account,
-            "amount_paise": amount_paise, "note": note,
+            "amount": amount, "note": note,
             "balance_paise": balance}
 
 

@@ -7,8 +7,8 @@ closed** (`no_matching_policy`).
 
 ## Defaults (config, not hardcoded logic)
 
-- `AUTO_ALLOW_BILL_LIMIT_PAISA = 500_000` (Rs 5,000)
-- `HOLD_TRANSFER_ABOVE_PAISA = 500_000` (Rs 5,000)
+- `AUTO_ALLOW_BILL_LIMIT_INR = 5_000`
+- `HOLD_TRANSFER_ABOVE_INR = 5_000`
 - `APPROVAL_WAIT_SECONDS = 60`
 
 ## Rules
@@ -36,7 +36,8 @@ closed** (`no_matching_policy`).
   policy applies.
 - Threshold policies read the **amount** argument — keep the field named
   `amount` (ArmorIQ scans `amount/value/total/price/cost`; e.g. a field named
-  `total_cents` would be invisible to thresholds).
+  `total_cents` would be invisible to thresholds). Tool `amount` params are
+  whole **rupees**; the sandbox ledger converts to paise internally.
 - Cover **every** money-moving tool (`pay_bill` AND `transfer_money`); the
   model will otherwise reach for the uncovered sibling.
 - Per-user limits differ by role (e.g. tier-1 family helper vs. account

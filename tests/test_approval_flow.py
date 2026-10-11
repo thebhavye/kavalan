@@ -13,7 +13,7 @@ def test_hold_approve_resume(tmp_path, monkeypatch):
     client = TestClient(app)
 
     held_id = store.add_held(trace_id="t1", tool="kavalan-payments.transfer_money",
-                             args={"to_account": "family-beta", "amount": 4000000},
+                             args={"to_account": "family-beta", "amount": 40000},
                              reason="above threshold")
     assert client.get("/pending").json()["pending"][0]["id"] == held_id
     page = client.get(f"/approve/{held_id}")

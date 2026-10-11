@@ -29,14 +29,16 @@ OTP_WORDS = ("otp", "pin", "cvv", "digital arrest", "arrest", "cbi", "share")
 MEDICINE_WORDS = ("medicine", "dawai", "tablet", "reorder", "pharmacy", "marunthu")
 DOCTOR_WORDS = ("doctor", "appointment", "visit", "clinic", "hospital")
 
-DEFAULT_BILL_PAISA = 120_000  # Rs 1,200 typical TNEB bill (scaffold default)
+DEFAULT_BILL_RUPEES = 1_200  # typical TNEB bill (scaffold default)
 
 
-def parse_amount_paise(text: str) -> int | None:
+def parse_amount_rupees(text: str) -> int | None:
+    """Whole rupees. Tool params use `amount` in rupees so ArmorIQ thresholds
+    (which scan amount/value/total/price/cost) read the real value."""
     match = AMOUNT_RE.search(text)
     if not match:
         return None
-    return int(match.group(1).replace(",", "")) * 100
+    return int(match.group(1).replace(",", ""))
 
 
 class KavalanAgent:
@@ -60,7 +62,7 @@ class KavalanAgent:
                            "channel": "phone"},
             }])
         if any(w in lowered for w in TRANSFER_WORDS):
-            amount = parse_amount_paise(text) or 0
+            amount = parse_amount_rupees(text) or 0
             return ("send money to family member", [{
                 "action": "transfer_money",
                 "mcp": self.mcp_payments,
@@ -68,7 +70,7 @@ class KavalanAgent:
                            "amount": amount, "note": text[:120]},
             }])
         if any(w in lowered for w in BILL_WORDS):
-            amount = parse_amount_paise(text) or DEFAULT_BILL_PAISA
+            amount = parse_amount_rupees(text) or DEFAULT_BILL_RUPEES
             return ("pay electricity bill", [{
                 "action": "pay_bill",
                 "mcp": self.mcp_payments,
