@@ -64,8 +64,8 @@ uv run pytest -q
 ## Run
 
 ```sh
-make run-mcp          # payments MCP server (stdio)
-make run-mcp-pharmacy # pharmacy MCP server (stdio)
+make run-mcp          # payments MCP server (HTTP :8001/mcp)
+make run-mcp-pharmacy # pharmacy MCP server (HTTP :8002/mcp)
 make run-approval     # approval web service on :8000
 make run-agent        # agent CLI, TEXT mode
 make demo             # 3 scripted scenarios through the REAL pipeline
